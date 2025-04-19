@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabliczka Mnożenia</title>
+	
+    <!-- Link do Manifestu Aplikacji -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Meta tagi dla PWA i wyglądu na mobilkach -->
+    <meta name="theme-color" content="#99ccff"/> <!-- Kolor paska przeglądarki -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes"> <!-- Dla iOS -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"> <!-- Styl paska statusu na iOS -->
+    <meta name="apple-mobile-web-app-title" content="Mnożenie"> <!-- Nazwa na iOS -->
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png"> <!-- Ikona dla iOS -->
+
+    <style>
+        body{font-family:'Comic Sans MS',cursive,sans-serif;background-color:#f0f8ff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;text-align:center}
+        #card-container{perspective:1000px;width:300px;height:400px;position:relative}
+        #card{width:100%;height:100%;position:absolute;transition:transform .6s,opacity .6s;transform-style:preserve-3d;cursor:pointer}
+        #card.flipped{transform:rotateY(180deg)}
+        #card.hiding{opacity:0;transform:scale(.8)}
+        .card-face{position:absolute;width:100%;height:100%;backface-visibility:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;border-radius:15px;box-shadow:0 4px 8px rgba(0,0,0,.2);font-size:48px;font-weight:700}
+        #card-front{background-color:#ff9999;color:#333}
+        #card-back{background-color:#99ccff;color:#333;transform:rotateY(180deg)}
+        .controls{display:flex;justify-content:center;gap:15px;margin-top:20px}
+        .btn{padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:18px}
+        #correct-btn{background-color:#4CAF50;color:white}
+        #incorrect-btn{background-color:#FFC107;color:black}
+        #second-round-btn,#restart-btn{background-color:#9C27B0;color:white;display:none}
+        .settings{position:absolute;top:20px;left:20px}
+        .counters{position:absolute;top:20px;right:20px;display:flex;flex-direction:column;align-items:flex-end;font-size:16px}
+        .counter{margin-bottom:5px}
+        .total{color:blue}.correct{color:green}.incorrect{color:orange}.remaining{color:purple}
+        #final-summary{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background-color:rgba(255,255,255,.9);padding:20px;border-radius:15px;box-shadow:0 4px 8px rgba(0,0,0,.2);z-index:10;display:none;width:350px}
+        #final-summary hr{border:none;border-top:2px solid #9C27B0;margin:15px 0}
+        .summary-section{margin-bottom:10px}
+        .summary-section h3{margin-bottom:10px;color:#9C27B0}
+    </style>
+</head>
+<body>
+    <div>
+        <div class="settings">
+            <select id="range-select">
+                <option value="2-5">2-5</option>
+                <option value="2-9">2-9</option>
+                <option value="3-9">3-9</option>
+                <option value="10" selected>Do 10 (domyślny)</option>
+                <option value="12">Do 12</option>
+            </select>
+        </div>
+        
+        <div class="counters">
+            <div class="counter total">Razem: <span id="total-count">0</span></div>
+            <div class="counter correct">Dobrze: <span id="correct-count">0</span></div>
+            <div class="counter incorrect">Źle: <span id="incorrect-count">0</span></div>
+            <div class="counter remaining">Zostało: <span id="remaining-count">0</span></div>
+        </div>
+        
+        <div id="card-container">
+            <div id="card">
+                <div id="card-front" class="card-face"></div>
+                <div id="card-back" class="card-face"></div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="correct-btn" class="btn">Dobrze!</button>
+            <button id="incorrect-btn" class="btn">Nie wiem</button>
+            <button id="second-round-btn" class="btn">Druga tura</button>
+            <button id="restart-btn" class="btn">Jeszcze raz</button>
+        </div>
+
+        <div id="final-summary">
+            <h2>Podsumowanie</h2>
+            <div class="summary-section first-round">
+                <h3>Pierwsza tura</h3>
+                <p>Całkowita liczba kart: <span id="first-round-total-cards">0</span></p>
+                <p>Poprawne odpowiedzi: <span id="first-round-correct">0</span></p>
+                <p>Błędne odpowiedzi: <span id="first-round-incorrect">0</span></p>
+            </div>
+            <hr>
+            <div class="summary-section second-round">
+                <h3>Druga tura</h3>
+                <p>Całkowita liczba kart: <span id="second-round-total-cards">0</span></p>
+                <p>Poprawne odpowiedzi: <span id="second-round-correct">0</span></p>
+                <p>Błędne odpowiedzi: <span id="second-round-incorrect">0</span></p>
+            </div>
+            <button id="close-summary-btn" class="btn">Zamknij</button>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        // Elementy DOM
+        const $ = id => document.getElementById(id);
+        const dom = {
+            rangeSelect: $('range-select'),
+            card: $('card'),
+            cardFront: $('card-front'),
+            cardBack: $('card-back'),
+            correctBtn: $('correct-btn'),
+            incorrectBtn: $('incorrect-btn'),
+            secondRoundBtn: $('second-round-btn'),
+            restartBtn: $('restart-btn'),
+            totalCount: $('total-count'),
+            correctCount: $('correct-count'),
+            incorrectCount: $('incorrect-count'),
+            remainingCount: $('remaining-count'),
+            finalSummary: $('final-summary')
+        };
+
+        // Stan gry
+        const state = {
+            currentCards: [],
+            currentCardIndex: 0,
+            correctCards: [],
+            incorrectCards: [],
+            totalCount: 0,
+            correctCount: 0,
+            incorrectCount: 0,
+            remainingCount: 0,
+            isSecondRound: false,
+            totalCardsGenerated: 0,
+            firstRoundStats: { correct: 0, incorrect: 0 },
+            secondRoundStats: { correct: 0, incorrect: 0 }
+        };
+
+        // Generowanie kart
+        function generateCards(range) {
+            const cards = [];
+            let [minNum, maxNum] = range.includes('-') 
+                ? range.split('-').map(Number) 
+                : [1, Number(range)];
+
+            for (let i = minNum; i <= maxNum; i++) {
+                for (let j = minNum; j <= maxNum; j++) {
+                    cards.push({ question: `${i} × ${j}`, answer: i * j });
+                }
+            }
+            return cards.sort(() => Math.random() - 0.5);
+        }
+
+        // Aktualizacja liczników
+        function updateCounters() {
+            dom.totalCount.textContent = state.totalCount;
+            dom.correctCount.textContent = state.correctCount;
+            dom.incorrectCount.textContent = state.incorrectCount;
+            dom.remainingCount.textContent = state.remainingCount;
+        }
+
+        // Pokazanie karty
+        function showCard(cardData) {
+            dom.cardFront.textContent = cardData.question;
+            dom.cardBack.textContent = cardData.answer;
+            dom.card.classList.remove('flipped', 'hiding');
+            state.totalCount++;
+            state.remainingCount--;
+            updateCounters();
+        }
+
+        // Podsumowanie
+        function showFinalSummary() {
+            $('first-round-total-cards').textContent = state.totalCardsGenerated;
+            $('first-round-correct').textContent = state.firstRoundStats.correct;
+            $('first-round-incorrect').textContent = state.firstRoundStats.incorrect;
+            $('second-round-total-cards').textContent = state.firstRoundStats.incorrect;
+            $('second-round-correct').textContent = state.secondRoundStats.correct;
+            $('second-round-incorrect').textContent = state.secondRoundStats.incorrect;
+
+            dom.finalSummary.style.display = 'block';
+            dom.card.style.display = 'none';
+            ['correctBtn', 'incorrectBtn', 'secondRoundBtn'].forEach(btn => dom[btn].style.display = 'none');
+            dom.restartBtn.style.display = 'block';
+        }
+
+        // Następna karta
+        function nextCard() {
+            state.currentCardIndex++;
+            if (state.currentCardIndex >= state.currentCards.length) {
+                if (!state.isSecondRound && state.incorrectCards.length > 0) {
+                    dom.secondRoundBtn.style.display = 'block';
+                    ['correctBtn', 'incorrectBtn'].forEach(btn => dom[btn].style.display = 'none');
+                    dom.cardFront.textContent = 'Koniec pierwszej tury!';
+                    dom.cardBack.textContent = 'Kliknij "Druga tura"';
+                    return;
+                }
+                
+                if (state.isSecondRound) {
+                    showFinalSummary();
+                    return;
+                }
+                
+                state.currentCardIndex = 0;
+                state.currentCards = [...state.correctCards, ...state.incorrectCards];
+                state.correctCards = [];
+                state.incorrectCards = [];
+                state.currentCards.sort(() => Math.random() - 0.5);
+                
+                state.totalCount = 0;
+                state.correctCount = 0;
+                state.incorrectCount = 0;
+                state.remainingCount = state.currentCards.length;
+                state.isSecondRound = false;
+                
+                dom.secondRoundBtn.style.display = 'none';
+                ['correctBtn', 'incorrectBtn'].forEach(btn => dom[btn].style.display = 'block');
+            }
+            
+            setTimeout(() => showCard(state.currentCards[state.currentCardIndex]), 600);
+        }
+
+        // Inicjalizacja kart
+        function initializeCards(range) {
+            // Reset statystyk
+            state.firstRoundStats = { correct: 0, incorrect: 0 };
+            state.secondRoundStats = { correct: 0, incorrect: 0 };
+
+            state.currentCards = generateCards(range);
+            state.totalCardsGenerated = state.currentCards.length;
+            state.currentCardIndex = 0;
+            state.totalCount = 0;
+            state.correctCount = 0;
+            state.incorrectCount = 0;
+            state.correctCards = [];
+            state.incorrectCards = [];
+            state.remainingCount = state.currentCards.length;
+            state.isSecondRound = false;
+            
+            dom.card.style.display = 'block';
+            dom.secondRoundBtn.style.display = 'none';
+            dom.restartBtn.style.display = 'none';
+            ['correctBtn', 'incorrectBtn'].forEach(btn => dom[btn].style.display = 'block');
+            dom.finalSummary.style.display = 'none';
+
+            updateCounters();
+            showCard(state.currentCards[0]);
+        }
+
+        // Event Listeners
+        dom.card.addEventListener('click', () => dom.card.classList.toggle('flipped'));
+
+        dom.correctBtn.addEventListener('click', () => {
+            dom.card.classList.add('hiding');
+            state.correctCards.push(state.currentCards[state.currentCardIndex]);
+            state.correctCount++;
+
+            if (!state.isSecondRound) {
+                state.firstRoundStats.correct++;
+            } else {
+                state.secondRoundStats.correct++;
+            }
+
+            updateCounters();
+            nextCard();
+        });
+
+        dom.incorrectBtn.addEventListener('click', () => {
+            dom.card.classList.add('hiding');
+            state.incorrectCards.push(state.currentCards[state.currentCardIndex]);
+            state.incorrectCount++;
+
+            if (!state.isSecondRound) {
+                state.firstRoundStats.incorrect++;
+            } else {
+                state.secondRoundStats.incorrect++;
+            }
+
+            updateCounters();
+            nextCard();
+        });
+
+        dom.secondRoundBtn.addEventListener('click', () => {
+            state.currentCards = state.incorrectCards.slice();
+            state.incorrectCards = [];
+            state.currentCardIndex = 0;
+            state.totalCount = 0;
+            state.correctCount = 0;
+            state.incorrectCount = 0;
+            state.remainingCount = state.currentCards.length;
+            state.isSecondRound = true;
+            updateCounters();
+            
+            dom.secondRoundBtn.style.display = 'none';
+            ['correctBtn', 'incorrectBtn'].forEach(btn => dom[btn].style.display = 'block');
+            
+            showCard(state.currentCards[0]);
+        });
+
+        dom.rangeSelect.addEventListener('change', () => initializeCards(dom.rangeSelect.value));
+        dom.restartBtn.addEventListener('click', () => initializeCards(dom.rangeSelect.value));
+        $('close-summary-btn').addEventListener('click', () => dom.finalSummary.style.display = 'none');
+
+        // Inicjalizacja
+        initializeCards('10');
+    })();
+
+// Skrypt rejestrujący Service Worker
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js') // Upewnij się, że ścieżka jest poprawna
+              .then(registration => {
+                console.log('Service Worker zarejestrowany pomyślnie:', registration.scope);
+              })
+              .catch(error => {
+                console.error('Rejestracja Service Workera nie powiodła się:', error);
+              });
+          });
+        }
+
+    </script>
+</body>
+</html>
